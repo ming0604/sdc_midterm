@@ -16,6 +16,8 @@
 #include<geometry_msgs/PoseStamped.h>
 #include<geometry_msgs/PoseWithCovarianceStamped.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/extract_indices.h>
 
 using namespace ros;
 using namespace std;
@@ -30,7 +32,8 @@ void pub_all()
     sensor_msgs::PointCloud2 map_pc;
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr sum (new pcl::PointCloud<pcl::PointXYZI>);
-    
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_min (new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_min_2_4 (new pcl::PointCloud<pcl::PointXYZI>);
     for(int i=-40; i<10; i++)
     {
         for(int j=-10; j<10; j++)
@@ -95,12 +98,44 @@ void pub_all()
                 }
             }
 
+            // get the cloud of z=min+0.5~z=min+0.8
             pass.setInputCloud(cloud);
             pass.setFilterFieldName("z");
-            pass.setFilterLimits(z_min+2, z_min+4);
+            pass.setFilterLimits(z_min+0.5 , z_min+0.8);
             pass.setFilterLimitsNegative(false);
-            pass.filter(*cloud);
+            pass.filter(*cloud_min);
+
+            // get the cloud of z=min2~z=min+4
+            pass.setInputCloud(cloud);
+            pass.setFilterFieldName("z");
+            pass.setFilterLimits(z_min+2 , z_min+4);
+            pass.setFilterLimitsNegative(false);
+            pass.filter(*cloud_min_2_4);
+
+            //combine
+            *cloud = *cloud_min + *cloud_min_2_4;
+
+            /*
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_segmented(new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+            pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+            pcl::SACSegmentation<pcl::PointXYZI> seg;
+            seg.setOptimizeCoefficients(true);
+            seg.setModelType(pcl::SACMODEL_LINE);  // 指定模型类型为直线
+            seg.setMethodType(pcl::SAC_RANSAC);
+            seg.setDistanceThreshold(0.01);  // 阈值，用于确定点是否属于模型
+            seg.setAxis(Eigen::Vector3f(0, 0, 1));
+            seg.setInputCloud(cloud_min_2);
+            seg.segment(*inliers, *coefficients);
+
+            pcl::ExtractIndices<pcl::PointXYZI> extract;
+            extract.setInputCloud(cloud_min_2);
+            extract.setIndices(inliers);
+            extract.setNegative(false);  // 设置为 false，表示提取 inliers
+            extract.filter(*cloud);
+            */
             
+
             cout << i << ", " << j << " : " << z_min << " " << cloud->points.size() <<  endl;            
 
             for(int i=0; i<cloud->points.size(); i++)

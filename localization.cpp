@@ -51,6 +51,7 @@ private:
     float last_gps_x;
     float last_gps_y;
     float last_gps_yaw;
+    float distance, delta_angle;
 
     int seq = 0;
     int max_iter;
@@ -76,7 +77,7 @@ public:
 
         init_guess.setIdentity();
         file.open(save_path);
-        file << "seq,x,y,yaw\n";
+        file << "id,x,y,yaw\n";
 
         radar_pc_sub = _nh.subscribe("/radar_pc", 400, &Localizer::radar_pc_callback, this);
         map_sub = _nh.subscribe("/map_pc", 1, &Localizer::map_callback, this);
@@ -109,30 +110,25 @@ public:
         m.getRPY(r, p, yaw);
         gps_yaw = yaw;
 
-        double distance;
         if(!gps_ready)
         {   
             pose_x = gps_x;
             pose_y = gps_y;
             pose_yaw = gps_yaw;
-            last_gps_x = gps_x;
-            last_gps_y = gps_y;
-            last_gps_yaw = gps_yaw;
             gps_ready = true;
         }
         else
         {
-            distance = sqrt(pow(gps_x-last_gps_x, 2) + pow(gps_y-last_gps_y, 2));
-            if(distance > 5 )
+            distance = sqrt(pow(gps_x-pose_x, 2) + pow(gps_y-pose_y, 2));
+            delta_angle = abs(gps_yaw - pose_yaw );
+            if(distance > 5 || delta_angle > M_PI/2)
             {
                 pose_x = gps_x;
                 pose_y = gps_y;
                 pose_yaw = gps_yaw;
                 initialized = false;
+                cout << "icp_bad! use gps correct" << endl;
             }
-            last_gps_x = gps_x;
-            last_gps_y = gps_y;
-            last_gps_yaw = gps_yaw;
         }
     }
 
@@ -164,8 +160,6 @@ public:
             //use GPS as initial guess
             set_init_guess(pose_x,pose_y,pose_yaw);
             initialized = true;
-            cout << "init_by_gps: [" << pose_x << "," << pose_y << "," << pose_yaw << "]" << endl;
-            cout << init_guess << endl;
         }
 
 
@@ -174,33 +168,74 @@ public:
         pcl::transformPointCloud(*radar_pc,*radar_pc_map_frame,init_guess);
 
         /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
-        // Create an ICP object
-        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-        icp.setMaximumIterations(100);
-        icp.setMaxCorrespondenceDistance (3);
-    
-        //ser source pc as radar point cloud, and target pc as map point cloud
-        icp.setInputSource(radar_pc_map_frame);
-        icp.setInputTarget(map_pc);
-
-        //run the ICP, then get the transformation matrix after icp alignment which transform oringin pose frame to refined pose frame
-        icp.align(*output_pc);
+        bool good_results = true;
+        float MaxCorrespondenceDistance = 2;
         Eigen::Matrix4f initial_to_aligned;
         Eigen::Matrix4f aligned_to_initial;
-        if(icp.hasConverged())
-        {
-            cout << " icp score: " << icp.getFitnessScore() << endl;
-        }
-        initial_to_aligned = icp.getFinalTransformation();
-        aligned_to_initial = initial_to_aligned.inverse();
+        while (good_results)
+        {   
+            if(MaxCorrespondenceDistance==0)
+            {   
+                break;
+            }
+            // Create an ICP object
+            pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
+            /*
+            double max_correspondence_distance = icp.getMaxCorrespondenceDistance();
+            int max_iterations = icp.getMaximumIterations();
+            double Epsilon = icp.getTransformationEpsilon();
+            cout << "Epsilon:" << Epsilon << endl;
+            */
+            icp.setTransformationEpsilon (1e-8);
+            icp.setMaximumIterations(50);
+            icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
 
-        /*TODO : Assign the result to pose_x, pose_y, pose_yaw */
-        /*TODO : Use result as next time initial guess */
-        init_guess = init_guess * aligned_to_initial;
-        pose_x = init_guess(0, 3);
-        pose_y = init_guess(1, 3);
-        pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
-       
+            //ser source pc as radar point cloud, and target pc as map point cloud
+            icp.setInputSource(radar_pc_map_frame);
+            icp.setInputTarget(map_pc);
+
+            //run the ICP, then get the transformation matrix after icp alignment which transform oringin pose frame to refined pose frame
+            icp.align(*output_pc);
+
+            if(icp.hasConverged())
+            {
+                cout << " icp score: " << icp.getFitnessScore() << endl;
+            }
+            initial_to_aligned = icp.getFinalTransformation();
+            aligned_to_initial = initial_to_aligned.inverse();
+
+            float x_change, y_change, yaw_change;
+            x_change = aligned_to_initial(0,3);
+            y_change = aligned_to_initial(1,3);
+            yaw_change = atan2(aligned_to_initial(1, 0), aligned_to_initial(0, 0));
+
+            if(x_change<0 || abs(y_change)>5 ||(yaw_change)> M_PI/2)
+            {
+                ROS_WARN("ICP got wrong result!");
+                MaxCorrespondenceDistance -= 0.5;
+            }
+            else
+            {   
+                /*TODO : Assign the result to pose_x, pose_y, pose_yaw */
+                /*TODO : Use result as next time initial guess */
+                init_guess = init_guess * aligned_to_initial;
+                pose_x = init_guess(0, 3);
+                pose_y = init_guess(1, 3);
+                pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
+                good_results = false;
+            }
+        }
+        
+
+      
+
+        /*
+        distance = sqrt(pow(pose_x-gps_x, 2) + pow(pose_y-gps_y, 2));
+        delta_angle = abs(pose_yaw - gps_yaw);
+        cout << "distance: " << distance << endl;
+        cout << "delta angle: " << delta_angle << endl;
+        */
+
         tf_brocaster(pose_x, pose_y, pose_yaw);
         radar_pose_publisher(pose_x, pose_y, pose_yaw);
 

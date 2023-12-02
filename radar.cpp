@@ -13,6 +13,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/uniform_sampling.h>
+#include <pcl/filters/radius_outlier_removal.h>
 #include <algorithm>
 
 using namespace std;
@@ -47,12 +49,12 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
         for(int j=4; j<image_cols; j++)
         {   
             // get the angle
-            angle = delta_angle*j;
+            angle = -delta_angle*j;
 
             // count the x and y values
             distance = range_resolution*i;
             x = distance*cos(angle);
-            y = -distance*sin(angle);
+            y = distance*sin(angle);
 
             //get the intensity of the pixel 
             radar_intensity = static_cast<float>(img.at<uchar>(i, j));
@@ -69,7 +71,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
     std::sort(noisy_pc->points.begin(), noisy_pc->points.end(), intensity_compare);
     
 
-    float intensity_threshold = 70;
+    float intensity_threshold = 80;
 
     for(int i=0; i<noisy_pc->points.size(); i++)
     {
@@ -78,13 +80,26 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
             new_pc->push_back(noisy_pc->points[i]);
         }
     }
+
+    pcl::RadiusOutlierRemoval<pcl::PointXYZI> sor;
+    sor.setInputCloud(new_pc);
+    sor.setRadiusSearch(2); // 半径阈值
+    sor.setMinNeighborsInRadius(20); // 邻近点最小数量
+    sor.filter(*new_pc);
+
     
+    pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
+    uniform_sampling.setInputCloud(new_pc);
+    uniform_sampling.setRadiusSearch(0.3);  // 使用半径进行采样
+    uniform_sampling.filter(*new_pc);
+    
+    /*
     pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
     sor.setInputCloud(new_pc);
-    sor.setMeanK(50);  // 鄰近點的數量
+    sor.setMeanK(300);  // 鄰近點的數量
     sor.setStddevMulThresh(1.0);  // 標準差閾值
     sor.filter(*new_pc);
-    
+    */
     return new_pc;
 }
 
