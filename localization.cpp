@@ -169,7 +169,7 @@ public:
 
         /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
         bool good_results = true;
-        float MaxCorrespondenceDistance = 2;
+        float MaxCorrespondenceDistance = 3;
         Eigen::Matrix4f initial_to_aligned;
         Eigen::Matrix4f aligned_to_initial;
         while (good_results)
@@ -187,7 +187,7 @@ public:
             cout << "Epsilon:" << Epsilon << endl;
             */
             icp.setTransformationEpsilon (1e-8);
-            icp.setMaximumIterations(50);
+            icp.setMaximumIterations(5);
             icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
 
             //ser source pc as radar point cloud, and target pc as map point cloud
@@ -200,30 +200,32 @@ public:
             if(icp.hasConverged())
             {
                 cout << " icp score: " << icp.getFitnessScore() << endl;
-            }
-            initial_to_aligned = icp.getFinalTransformation();
-            aligned_to_initial = initial_to_aligned.inverse();
 
-            float x_change, y_change, yaw_change;
-            x_change = aligned_to_initial(0,3);
-            y_change = aligned_to_initial(1,3);
-            yaw_change = atan2(aligned_to_initial(1, 0), aligned_to_initial(0, 0));
+                initial_to_aligned = icp.getFinalTransformation();
+                aligned_to_initial = initial_to_aligned.inverse();
 
-            if(x_change<0 || abs(y_change)>5 ||(yaw_change)> M_PI/2)
-            {
-                ROS_WARN("ICP got wrong result!");
-                MaxCorrespondenceDistance -= 0.5;
+                float x_change, y_change, yaw_change;
+                x_change = aligned_to_initial(0,3);
+                y_change = aligned_to_initial(1,3);
+                yaw_change = atan2(aligned_to_initial(1, 0), aligned_to_initial(0, 0));
+
+                if(x_change<0 || abs(y_change)>5 ||(yaw_change)> M_PI/2)
+                {
+                    ROS_WARN("ICP got wrong result!");
+                    MaxCorrespondenceDistance -= 1;
+                }
+                else
+                {   
+                    /*TODO : Assign the result to pose_x, pose_y, pose_yaw */
+                    /*TODO : Use result as next time initial guess */
+                    init_guess = init_guess * aligned_to_initial;
+                    pose_x = init_guess(0, 3);
+                    pose_y = init_guess(1, 3);
+                    pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
+                    good_results = false;
+                }
             }
-            else
-            {   
-                /*TODO : Assign the result to pose_x, pose_y, pose_yaw */
-                /*TODO : Use result as next time initial guess */
-                init_guess = init_guess * aligned_to_initial;
-                pose_x = init_guess(0, 3);
-                pose_y = init_guess(1, 3);
-                pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
-                good_results = false;
-            }
+
         }
         
 
