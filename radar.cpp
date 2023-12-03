@@ -81,18 +81,17 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
         }
     }
 
-    pcl::RadiusOutlierRemoval<pcl::PointXYZI> sor;
-    sor.setInputCloud(new_pc);
-    sor.setRadiusSearch(2); // 半径阈值
-    sor.setMinNeighborsInRadius(20); // 邻近点最小数量
-    sor.filter(*new_pc);
 
-    
     pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
     uniform_sampling.setInputCloud(new_pc);
-    uniform_sampling.setRadiusSearch(0.3);  // 使用半径进行采样
+    uniform_sampling.setRadiusSearch(0.5);  // 使用半径进行采样
     uniform_sampling.filter(*new_pc);
-    
+
+    pcl::RadiusOutlierRemoval<pcl::PointXYZI> sor;
+    sor.setInputCloud(new_pc);
+    sor.setRadiusSearch(2.5); // 半径阈值
+    sor.setMinNeighborsInRadius(5); // 邻近点最小数量
+    sor.filter(*new_pc);
     /*
     pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
     sor.setInputCloud(new_pc);

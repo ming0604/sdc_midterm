@@ -169,7 +169,7 @@ public:
 
         /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
         bool good_results = true;
-        float MaxCorrespondenceDistance = 3;
+        float MaxCorrespondenceDistance = 5;
         Eigen::Matrix4f initial_to_aligned;
         Eigen::Matrix4f aligned_to_initial;
         while (good_results)
@@ -186,7 +186,7 @@ public:
             double Epsilon = icp.getTransformationEpsilon();
             cout << "Epsilon:" << Epsilon << endl;
             */
-            icp.setTransformationEpsilon (1e-8);
+            //icp.setTransformationEpsilon (1e-8);
             icp.setMaximumIterations(5);
             icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
 
@@ -209,10 +209,10 @@ public:
                 y_change = aligned_to_initial(1,3);
                 yaw_change = atan2(aligned_to_initial(1, 0), aligned_to_initial(0, 0));
 
-                if(x_change<0 || abs(y_change)>5 ||(yaw_change)> M_PI/2)
+                if(x_change<0 || abs(y_change)>8 ||(yaw_change)> M_PI/2)
                 {
                     ROS_WARN("ICP got wrong result!");
-                    MaxCorrespondenceDistance -= 1;
+                    MaxCorrespondenceDistance -= 2.5;
                 }
                 else
                 {   
