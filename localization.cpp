@@ -161,54 +161,120 @@ public:
             set_init_guess(pose_x,pose_y,pose_yaw);
             initialized = true;
         }
-
-
-        //transform the radar points from the body to the map frame
-        pcl::PointCloud<pcl::PointXYZI>::Ptr radar_pc_map_frame(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::transformPointCloud(*radar_pc,*radar_pc_map_frame,init_guess);
-
-        /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
-        bool good_results = false;
-        float MaxCorrespondenceDistance = 3;
-        Eigen::Matrix4f initial_to_aligned;
-        Eigen::Matrix4f aligned_to_initial;
-        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-        while (!good_results)
+        else
         {   
-            if(MaxCorrespondenceDistance==0)
-            {   
-                break;
-            }
-            // Create an ICP object
-            /*
-            double max_correspondence_distance = icp.getMaxCorrespondenceDistance();
-            int max_iterations = icp.getMaximumIterations();
-            double Epsilon = icp.getTransformationEpsilon();
-            cout << "Epsilon:" << Epsilon << endl;
-            */
-            //icp.setTransformationEpsilon (1e-9);
-            icp.setMaximumIterations(5);
-            icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
+            //compare the icp score of with kinematic compensation and without.
+            vector<float> icp_score;
+            vector<Eigen::Matrix4f> a_to_i;
+            pcl::PointCloud<pcl::PointXYZI>::Ptr radar_pc_map_frame(new pcl::PointCloud<pcl::PointXYZI>);
+            //init_guess from last icp
+            //transform the radar points from the body to the map frame
+            pcl::transformPointCloud(*radar_pc,*radar_pc_map_frame,init_guess);
 
-            //ser source pc as radar point cloud, and target pc as map point cloud
+            /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
+            Eigen::Matrix4f initial_to_aligned;
+            Eigen::Matrix4f aligned_to_initial;
+            Eigen::Matrix4f kinematic_guess;
+            // Create an ICP object
+            pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
+                /*
+                double max_correspondence_distance = icp.getMaxCorrespondenceDistance();
+                int max_iterations = icp.getMaximumIterations();
+                double Epsilon = icp.getTransformationEpsilon();
+                cout << "Epsilon:" << Epsilon << endl;
+                */
+                //icp.setTransformationEpsilon (1e-9);
+            //icp.setMaximumIterations(10);
+            //icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
+            icp.setMaxCorrespondenceDistance (0.6);
+            //icp.setMaximumIterations (30);
+            //icp.setTransformationEpsilon (1e-8);
+            //set source pc as radar point cloud, and target pc as map point cloud
             icp.setInputSource(radar_pc_map_frame);
             icp.setInputTarget(map_pc);
 
             //run the ICP, then get the transformation matrix after icp alignment which transform oringin pose frame to refined pose frame
             icp.align(*output_pc);
-
+            initial_to_aligned = icp.getFinalTransformation();
+            aligned_to_initial = initial_to_aligned.inverse();
+            a_to_i.push_back(aligned_to_initial);
             if(icp.hasConverged())
             {
-                cout << " icp score: " << icp.getFitnessScore() << endl;
+                icp_score.push_back(icp.getFitnessScore());
+            }
+            else
+            {
+                icp_score.push_back(100000);
+            }
+            
+            //init_guess from last icp plus kinematic compensation
+            Eigen::Vector4f s(2.2, 0.0, 0.0, 1.0);
+            Eigen::Vector4f plus_world = init_guess * s;
+            float x_plus_world,y_plus_world;
+            x_plus_world = plus_world(0);
+            y_plus_world = plus_world(1);
+            //cout<<"x_plus_world:"<<x_plus_world<<endl;
+            kinematic_guess = set_guess(x_plus_world,y_plus_world,pose_yaw);
+            pcl::transformPointCloud(*radar_pc,*radar_pc_map_frame,kinematic_guess);
 
-                initial_to_aligned = icp.getFinalTransformation();
-                aligned_to_initial = initial_to_aligned.inverse();
+            //set source pc as radar point cloud, and target pc as map point cloud
+            icp.setInputSource(radar_pc_map_frame);
+            icp.setInputTarget(map_pc);
 
+            //run the ICP, then get the transformation matrix after icp alignment which transform oringin pose frame to refined pose frame
+            icp.align(*output_pc);
+            initial_to_aligned = icp.getFinalTransformation();
+            aligned_to_initial = initial_to_aligned.inverse();
+            a_to_i.push_back(aligned_to_initial);
+            if(icp.hasConverged())
+            {
+                icp_score.push_back(icp.getFitnessScore());
+            }
+            else
+            {
+                icp_score.push_back(100000);
+            }
+
+            //which has better score, then use its transformation matrix
+            if(icp_score[0] > icp_score[1])
+            {
+                cout << " stop icp win, score: " << icp_score[0] << endl;
+                if(icp.getFitnessScore() < 15)
+                {
+                    ROS_WARN("good ICP!");
+                }
+                /*TODO : Assign the result to pose_x, pose_y, pose_yaw */
+                /*TODO : Use result as next time initial guess */
+                aligned_to_initial = a_to_i[0];
+                init_guess = init_guess * aligned_to_initial;
+                pose_x = init_guess(0, 3);
+                pose_y = init_guess(1, 3);
+                pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
+        
+            }
+            else
+            {
+                cout << " run icp win, score: " << icp_score[1] << endl;
+                if(icp.getFitnessScore() < 15)
+                {
+                    ROS_WARN("good ICP!");
+                }
+
+                /*TODO : Assign the result to pose_x, pose_y, pose_yaw */
+                /*TODO : Use result as next time initial guess */
+                aligned_to_initial = a_to_i[1];
+                init_guess = kinematic_guess * aligned_to_initial;
+                pose_x = init_guess(0, 3);
+                pose_y = init_guess(1, 3);
+                pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
+            }
+                
+
+                /*
                 float x_change, y_change, yaw_change;
                 x_change = aligned_to_initial(0,3);
                 y_change = aligned_to_initial(1,3);
                 yaw_change = atan2(aligned_to_initial(1, 0), aligned_to_initial(0, 0));
-
                 if(x_change<0 || abs(y_change)>10 ||abs(yaw_change)> M_PI/2 || icp.getFitnessScore()>50)
                 {
                     ROS_WARN("ICP got wrong result!");
@@ -219,28 +285,12 @@ public:
                     cout<<"x_plus_world:"<<x_plus_world<<endl;
                     pose_x = x_plus_world;
                     MaxCorrespondenceDistance -= 1;
-                }
-                else
-                {   
-                    /*TODO : Assign the result to pose_x, pose_y, pose_yaw */
-                    /*TODO : Use result as next time initial guess */
-                    init_guess = init_guess * aligned_to_initial;
-                    pose_x = init_guess(0, 3);
-                    pose_y = init_guess(1, 3);
-                    pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
-                    good_results = true;
-                    ROS_INFO("get good result!");
-                }
-            }
+                } 
+                */
 
+       
+            
         }
-        
-        /*
-        distance = sqrt(pow(pose_x-gps_x, 2) + pow(pose_y-gps_y, 2));
-        delta_angle = abs(pose_yaw - gps_yaw);
-        cout << "distance: " << distance << endl;
-        cout << "delta angle: " << delta_angle << endl;
-        */
 
         tf_brocaster(pose_x, pose_y, pose_yaw);
         radar_pose_publisher(pose_x, pose_y, pose_yaw);
@@ -309,6 +359,19 @@ public:
         init_guess(1, 0) = sin(yaw);
         init_guess(1, 1) = cos(yaw);
         init_guess(1, 3) = y;
+    }
+
+    Eigen::Matrix4f set_guess(float x, float y, float yaw)
+    {   
+        Eigen::Matrix4f matrix = Eigen::Matrix4f::Identity();
+        matrix(0, 0) = cos(yaw);
+        matrix(0, 1) = -sin(yaw);
+        matrix(0, 3) = x;
+
+        matrix(1, 0) = sin(yaw);
+        matrix(1, 1) = cos(yaw);
+        matrix(1, 3) = y;
+        return matrix;
     }
 };
 

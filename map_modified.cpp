@@ -98,7 +98,7 @@ void pub_all()
                 }
             }
             
-            
+            /*
             // get the cloud of z=min+0.5~z=min+0.8
             pass.setInputCloud(cloud);
             pass.setFilterFieldName("z");
@@ -115,7 +115,32 @@ void pub_all()
 
             //combine
             *cloud = *cloud_min + *cloud_min_2_4;
+            */
 
+            // get the cloud of z=min2~z=min+4
+            pass.setInputCloud(cloud);
+            pass.setFilterFieldName("z");
+            pass.setFilterLimits(z_min+2, z_min+4.5);
+            pass.setFilterLimitsNegative(false);
+            pass.filter(*cloud);
+
+            float xy_distance;
+            float elevation;
+            float ele_limit;
+            float z_radar;
+            for(int i=0; i<cloud->points.size(); i++)
+            {   
+                xy_distance = sqrt(pow(cloud->points[i].x, 2) + pow(cloud->points[i].y, 2));
+                z_radar = z_min+1.95;
+                elevation = atan2(abs(cloud->points[i].z - z_radar), xy_distance);
+                ele_limit = (M_PI/180)*1.8;
+                if(elevation>=ele_limit)
+                {
+                    cloud->points.erase(cloud->points.begin() + i);
+                }
+            }
+            
+            
             /*
             pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_segmented(new pcl::PointCloud<pcl::PointXYZ>);
             pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);

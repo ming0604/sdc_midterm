@@ -84,10 +84,11 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
     }
 
     /*
-    pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
-    uniform_sampling.setInputCloud(new_pc);
-    uniform_sampling.setRadiusSearch(0.5);  // 使用半径进行采样
-    uniform_sampling.filter(*new_pc);
+    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid;
+    voxel_grid.setInputCloud(new_pc);
+    voxel_grid.setLeafSize(0.3f, 0.3f, 0.3f); 
+    voxel_grid.filter(*new_pc);
+
     */
 
     
@@ -97,10 +98,10 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
     sor.setMinNeighborsInRadius(20); // 邻近点最小数量
     sor.filter(*new_pc);
 
-    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid;
-    voxel_grid.setInputCloud(new_pc);
-    voxel_grid.setLeafSize(0.3f, 0.3f, 0.3f); 
-    voxel_grid.filter(*new_pc);
+    pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
+    uniform_sampling.setInputCloud(new_pc);
+    uniform_sampling.setRadiusSearch(0.2);  // 使用半径进行采样
+    uniform_sampling.filter(*new_pc);
     /*
     pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
     sor.setInputCloud(new_pc);
