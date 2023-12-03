@@ -16,8 +16,8 @@
 #include<geometry_msgs/PoseStamped.h>
 #include<geometry_msgs/PoseWithCovarianceStamped.h>
 #include <pcl/filters/statistical_outlier_removal.h>
-#include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/filters/uniform_sampling.h>
 
 using namespace ros;
 using namespace std;
@@ -97,18 +97,19 @@ void pub_all()
                     z_index = i;
                 }
             }
-
+            
+            
             // get the cloud of z=min+0.5~z=min+0.8
             pass.setInputCloud(cloud);
             pass.setFilterFieldName("z");
             pass.setFilterLimits(z_min+0.5 , z_min+0.8);
             pass.setFilterLimitsNegative(false);
             pass.filter(*cloud_min);
-
+            
             // get the cloud of z=min2~z=min+4
             pass.setInputCloud(cloud);
             pass.setFilterFieldName("z");
-            pass.setFilterLimits(z_min+2 , z_min+4);
+            pass.setFilterLimits(z_min+2, z_min+4.5);
             pass.setFilterLimitsNegative(false);
             pass.filter(*cloud_min_2_4);
 
@@ -133,6 +134,11 @@ void pub_all()
             extract.setIndices(inliers);
             extract.setNegative(false);  // 设置为 false，表示提取 inliers
             extract.filter(*cloud);
+
+            pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
+            uniform_sampling.setInputCloud(cloud);
+            uniform_sampling.setRadiusSearch(0.3);  // 使用半径进行采样
+            uniform_sampling.filter(*cloud);
             */
             
 
@@ -142,6 +148,13 @@ void pub_all()
             {
                 cloud->points[i].z = 0;
             }
+            
+            pcl::RadiusOutlierRemoval<pcl::PointXYZI> rad;
+            rad.setInputCloud(cloud);
+            rad.setRadiusSearch(1); // 半径阈值
+            rad.setMinNeighborsInRadius(10); // 邻近点最小数量
+            rad.filter(*cloud);
+            
             cloud->width = 1;
             cloud->height = cloud->points.size();
             *sum += *cloud;
@@ -168,6 +181,6 @@ int main(int argc, char** argv)
     
     map_pub = nh.advertise<sensor_msgs::PointCloud2>("/map_pc", 1);
     pub_all();
-    ros:spin();
+    ros::spin();
     return 0;
 }

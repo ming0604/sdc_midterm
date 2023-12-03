@@ -15,6 +15,8 @@
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/uniform_sampling.h>
 #include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/passthrough.h>
 #include <algorithm>
 
 using namespace std;
@@ -67,10 +69,10 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
             noisy_pc->push_back(point);
         }
     }
+    /*
     //sort the points by decreasing intensity
     std::sort(noisy_pc->points.begin(), noisy_pc->points.end(), intensity_compare);
-    
-
+    */
     float intensity_threshold = 80;
 
     for(int i=0; i<noisy_pc->points.size(); i++)
@@ -81,24 +83,48 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
         }
     }
 
-
+    /*
     pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
     uniform_sampling.setInputCloud(new_pc);
     uniform_sampling.setRadiusSearch(0.5);  // 使用半径进行采样
     uniform_sampling.filter(*new_pc);
+    */
 
+    
     pcl::RadiusOutlierRemoval<pcl::PointXYZI> sor;
     sor.setInputCloud(new_pc);
-    sor.setRadiusSearch(2.5); // 半径阈值
-    sor.setMinNeighborsInRadius(5); // 邻近点最小数量
+    sor.setRadiusSearch(2); // 半径阈值
+    sor.setMinNeighborsInRadius(20); // 邻近点最小数量
     sor.filter(*new_pc);
+
+    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid;
+    voxel_grid.setInputCloud(new_pc);
+    voxel_grid.setLeafSize(0.3f, 0.3f, 0.3f); 
+    voxel_grid.filter(*new_pc);
     /*
     pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
     sor.setInputCloud(new_pc);
     sor.setMeanK(300);  // 鄰近點的數量
     sor.setStddevMulThresh(1.0);  // 標準差閾值
     sor.filter(*new_pc);
+    
+
+    //filter of x direction
+    
+    pass.setInputCloud(new_pc);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(-35, 35);
+    pass.setFilterLimitsNegative(false);
+    pass.filter(*new_pc);
     */
+    //filter of y direction
+    pcl::PassThrough<pcl::PointXYZI> pass;
+    pass.setInputCloud(new_pc);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-40 , 40);
+    pass.setFilterLimitsNegative(false);
+    pass.filter(*new_pc);
+    
     return new_pc;
 }
 

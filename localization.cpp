@@ -123,8 +123,8 @@ public:
             delta_angle = abs(gps_yaw - pose_yaw );
             if(distance > 5 || delta_angle > M_PI/2)
             {
-                pose_x = gps_x;
-                pose_y = gps_y;
+                pose_x = 0.8*gps_x+0.2*pose_x;
+                pose_y = 0.8*gps_y+0.2*pose_y;
                 pose_yaw = gps_yaw;
                 initialized = false;
                 cout << "icp_bad! use gps correct" << endl;
@@ -168,25 +168,25 @@ public:
         pcl::transformPointCloud(*radar_pc,*radar_pc_map_frame,init_guess);
 
         /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
-        bool good_results = true;
-        float MaxCorrespondenceDistance = 5;
+        bool good_results = false;
+        float MaxCorrespondenceDistance = 3;
         Eigen::Matrix4f initial_to_aligned;
         Eigen::Matrix4f aligned_to_initial;
-        while (good_results)
+        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
+        while (!good_results)
         {   
             if(MaxCorrespondenceDistance==0)
             {   
                 break;
             }
             // Create an ICP object
-            pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
             /*
             double max_correspondence_distance = icp.getMaxCorrespondenceDistance();
             int max_iterations = icp.getMaximumIterations();
             double Epsilon = icp.getTransformationEpsilon();
             cout << "Epsilon:" << Epsilon << endl;
             */
-            //icp.setTransformationEpsilon (1e-8);
+            //icp.setTransformationEpsilon (1e-9);
             icp.setMaximumIterations(5);
             icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
 
@@ -209,10 +209,16 @@ public:
                 y_change = aligned_to_initial(1,3);
                 yaw_change = atan2(aligned_to_initial(1, 0), aligned_to_initial(0, 0));
 
-                if(x_change<0 || abs(y_change)>8 ||(yaw_change)> M_PI/2)
+                if(x_change<0 || abs(y_change)>10 ||abs(yaw_change)> M_PI/2 || icp.getFitnessScore()>50)
                 {
                     ROS_WARN("ICP got wrong result!");
-                    MaxCorrespondenceDistance -= 2.5;
+                    Eigen::Vector4f v(0.5, 0.0, 0.0, 1.0);
+                    Eigen::Vector4f plus_world = init_guess * v;
+                    float x_plus_world;
+                    x_plus_world = plus_world(0);
+                    cout<<"x_plus_world:"<<x_plus_world<<endl;
+                    pose_x = x_plus_world;
+                    MaxCorrespondenceDistance -= 1;
                 }
                 else
                 {   
@@ -222,15 +228,13 @@ public:
                     pose_x = init_guess(0, 3);
                     pose_y = init_guess(1, 3);
                     pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
-                    good_results = false;
+                    good_results = true;
+                    ROS_INFO("get good result!");
                 }
             }
 
         }
         
-
-      
-
         /*
         distance = sqrt(pow(pose_x-gps_x, 2) + pow(pose_y-gps_y, 2));
         delta_angle = abs(pose_yaw - gps_yaw);
