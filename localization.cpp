@@ -186,8 +186,8 @@ public:
                 //icp.setTransformationEpsilon (1e-9);
             //icp.setMaximumIterations(10);
             //icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
-            icp.setMaxCorrespondenceDistance (0.6);
-            //icp.setMaximumIterations (30);
+            icp.setMaxCorrespondenceDistance (0.5);
+            //icp.setMaximumIterations (100);
             //icp.setTransformationEpsilon (1e-8);
             //set source pc as radar point cloud, and target pc as map point cloud
             icp.setInputSource(radar_pc_map_frame);

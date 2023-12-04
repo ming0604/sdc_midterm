@@ -33,99 +33,59 @@ bool intensity_compare(pcl::PointXYZI a, pcl::PointXYZI b)
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
 {   
-    pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_pc(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr new_pc(new pcl::PointCloud<pcl::PointXYZI>);
        /*TODO : Transform Polar Image to Cartisien Pointcloud*/
     int image_rows = img.rows;
     int image_cols = img.cols;
     float radar_intensity;
-    pcl::PointXYZI point;
+
     float delta_angle;
     float x, y, distance, angle;
-    
+    int k_strongest = 40;
+    float intensity_threshold = 80;
     delta_angle = (2.0*M_PI)/image_cols;
-    // go through all the radar image pixels
-    for(int i=0; i<image_rows; i++)
-    {   
-        // start from the 4th row
-        for(int j=4; j<image_cols; j++)
-        {   
-            // get the angle
-            angle = -delta_angle*j;
 
+       // go through all the radar image angles
+    for (int i = 0; i < image_cols; i++)
+    {   
+        pcl::PointCloud<pcl::PointXYZI>::Ptr points(new pcl::PointCloud<pcl::PointXYZI>);
+        // get the angle
+        angle = -delta_angle * i;
+
+        // start from the 4th row
+        for (int j = 4; j < image_rows; j++)
+        {   
+            pcl::PointXYZI point;
             // count the x and y values
-            distance = range_resolution*i;
-            x = distance*cos(angle);
-            y = distance*sin(angle);
+            distance = range_resolution * j;
+            x = distance * cos(angle);
+            y = distance * sin(angle);
 
             //get the intensity of the pixel 
-            radar_intensity = static_cast<float>(img.at<uchar>(i, j));
+            radar_intensity = static_cast<float>(img.at<uchar>(j, i));
 
-            // store data into a point(assume at z=0)
+            // store data into a point (assume at z=0)
             point.x = x;
             point.y = y;
             point.z = 0.0;
             point.intensity = radar_intensity;
-            noisy_pc->push_back(point);
-        }
-    }
-    /*
-    //sort the points by decreasing intensity
-    std::sort(noisy_pc->points.begin(), noisy_pc->points.end(), intensity_compare);
-    */
-    float intensity_threshold = 80;
 
-    for(int i=0; i<noisy_pc->points.size(); i++)
-    {
-        if(noisy_pc->points[i].intensity>=intensity_threshold)
+            if (point.intensity >= intensity_threshold && abs(point.x) < 50 && abs(point.y) < 50)
+            {
+                points->push_back(point);
+            }
+        }
+
+        // sort the points by decreasing intensity
+        std::sort(points->points.begin(), points->points.end(), intensity_compare);
+        // k strongest filtering
+        int points_to_keep = std::min(k_strongest, static_cast<int>(points->size()));
+        for (int k = 0; k < points_to_keep; k++)
         {
-            new_pc->push_back(noisy_pc->points[i]);
+            new_pc->push_back(points->points[k]);
         }
     }
 
-    /*
-    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid;
-    voxel_grid.setInputCloud(new_pc);
-    voxel_grid.setLeafSize(0.3f, 0.3f, 0.3f); 
-    voxel_grid.filter(*new_pc);
-
-    */
-
-    
-    pcl::RadiusOutlierRemoval<pcl::PointXYZI> sor;
-    sor.setInputCloud(new_pc);
-    sor.setRadiusSearch(2); // 半径阈值
-    sor.setMinNeighborsInRadius(20); // 邻近点最小数量
-    sor.filter(*new_pc);
-
-    pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
-    uniform_sampling.setInputCloud(new_pc);
-    uniform_sampling.setRadiusSearch(0.2);  // 使用半径进行采样
-    uniform_sampling.filter(*new_pc);
-    /*
-    pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
-    sor.setInputCloud(new_pc);
-    sor.setMeanK(300);  // 鄰近點的數量
-    sor.setStddevMulThresh(1.0);  // 標準差閾值
-    sor.filter(*new_pc);
-    
-
-    //filter of x direction
-    
-    pass.setInputCloud(new_pc);
-    pass.setFilterFieldName("x");
-    pass.setFilterLimits(-35, 35);
-    pass.setFilterLimitsNegative(false);
-    pass.filter(*new_pc);
-    */
-    //filter of y direction
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud(new_pc);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(-40 , 40);
-    pass.setFilterLimitsNegative(false);
-    pass.filter(*new_pc);
-    
     return new_pc;
 }
 
