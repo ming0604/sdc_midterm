@@ -123,7 +123,7 @@ public:
         {
             distance = sqrt(pow(gps_x-pose_x, 2) + pow(gps_y-pose_y, 2));
             delta_angle = abs(gps_yaw - pose_yaw );
-            if(distance > 5 || delta_angle > M_PI/2)
+            if(distance > 8 || delta_angle > M_PI/2)
             {
                 pose_x = 0.8*gps_x+0.2*pose_x;
                 pose_y = 0.8*gps_y+0.2*pose_y;
@@ -167,26 +167,42 @@ public:
         //init_guess from last icp
 
         /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
-        Eigen::Matrix4f initial_to_aligned;
-        Eigen::Matrix4f aligned_to_initial;
+        bool good_results = true;
+        double MaxCorrespondenceDistance = 3;
+        double best_max_distance;
+        double score,min_score=100000;
         
-        // Create an ICP object
-        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-        icp.setMaxCorrespondenceDistance (6);
-        icp.setMaximumIterations (100);
-        icp.setTransformationEpsilon (1e-5);
-        icp.setEuclideanFitnessEpsilon(1e-5);
-        //set source pc as radar point cloud, and target pc as map point cloud
-        icp.setInputSource(radar_pc);
-        icp.setInputTarget(map_pc);
+        while (MaxCorrespondenceDistance>1)
+        {   
+            // Create an ICP object
+            pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
+            icp.setMaxCorrespondenceDistance (MaxCorrespondenceDistance);
+            icp.setMaximumIterations (100);
+            icp.setTransformationEpsilon (1e-5);
+            icp.setEuclideanFitnessEpsilon(1e-5);
+            //set source pc as radar point cloud, and target pc as map point cloud
+            icp.setInputSource(radar_pc);
+            icp.setInputTarget(map_pc);
 
-        //run the ICP, then get the transformation matrix after icp as new base_link
-        icp.align(*output_pc, init_guess);
-        init_guess = icp.getFinalTransformation();
+            //run the ICP, then get the transformation matrix after icp as new base_link
+            icp.align(*output_pc, init_guess);
+            if(icp.hasConverged())
+            {   
+                score = icp.getFitnessScore();
+                if(score<min_score)
+                {
+                    min_score = score;
+                    best_max_distance = MaxCorrespondenceDistance;
+                    init_guess = icp.getFinalTransformation();
+                }
+            }
+            MaxCorrespondenceDistance -= 2;
+        }
+        cout << "Best MaxCorrespondenceDistance: " << fixed << setprecision(2)<< best_max_distance << endl;
         pose_x = init_guess(0, 3);
         pose_y = init_guess(1, 3);
         pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
-
+        
         tf_brocaster(pose_x, pose_y, pose_yaw);
         radar_pose_publisher(pose_x, pose_y, pose_yaw);
 
