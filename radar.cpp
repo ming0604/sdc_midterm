@@ -70,7 +70,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
             point.z = 0.0;
             point.intensity = radar_intensity;
 
-            if (point.intensity >= intensity_threshold && abs(point.x) < 50 && abs(point.y) < 50)
+            if (point.intensity >= intensity_threshold)
             {
                 points->push_back(point);
             }
