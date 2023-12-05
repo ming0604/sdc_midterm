@@ -32,8 +32,8 @@ void pub_all()
     sensor_msgs::PointCloud2 map_pc;
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr sum (new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_min (new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_min_2_4 (new pcl::PointCloud<pcl::PointXYZI>);
+   
+
     for(int i=-40; i<10; i++)
     {
         for(int j=-10; j<10; j++)
@@ -115,56 +115,33 @@ void pub_all()
 
             //combine
             *cloud = *cloud_min + *cloud_min_2_4;
+            
+            float xy_distance;
+            float elevation;
+            float ele_limit;
+            float z_radar;
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_temp (new pcl::PointCloud<pcl::PointXYZI>);
+            for(int i=0; i<cloud->points.size(); i++)
+            {   
+                xy_distance = sqrt(pow(cloud->points[i].x, 2) + pow(cloud->points[i].y, 2));
+                z_radar = z_min+2.5;
+                elevation = atan2(abs(cloud->points[i].z - z_radar), xy_distance);
+                ele_limit = (M_PI/180)*1.8;
+                if(abs(elevation)<=ele_limit)
+                {
+                    cloud_temp->push_back(cloud->points[i]);
+                }
+            }
+            *cloud = *cloud_temp;
             */
-
+           
             // get the cloud of z=min2~z=min+4
             pass.setInputCloud(cloud);
             pass.setFilterFieldName("z");
             pass.setFilterLimits(z_min+1.8, z_min+4.5);
             pass.setFilterLimitsNegative(false);
             pass.filter(*cloud);
-
-            float xy_distance;
-            float elevation;
-            float ele_limit;
-            float z_radar;
-            for(int i=0; i<cloud->points.size(); i++)
-            {   
-                xy_distance = sqrt(pow(cloud->points[i].x, 2) + pow(cloud->points[i].y, 2));
-                z_radar = z_min+1.95;
-                elevation = atan2(abs(cloud->points[i].z - z_radar), xy_distance);
-                ele_limit = (M_PI/180)*1.8;
-                if(elevation>=ele_limit)
-                {
-                    cloud->points.erase(cloud->points.begin() + i);
-                }
-            }
-            
-            
-            /*
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_segmented(new pcl::PointCloud<pcl::PointXYZ>);
-            pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-            pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-            pcl::SACSegmentation<pcl::PointXYZI> seg;
-            seg.setOptimizeCoefficients(true);
-            seg.setModelType(pcl::SACMODEL_LINE);  // 指定模型类型为直线
-            seg.setMethodType(pcl::SAC_RANSAC);
-            seg.setDistanceThreshold(0.01);  // 阈值，用于确定点是否属于模型
-            seg.setAxis(Eigen::Vector3f(0, 0, 1));
-            seg.setInputCloud(cloud_min_2);
-            seg.segment(*inliers, *coefficients);
-
-            pcl::ExtractIndices<pcl::PointXYZI> extract;
-            extract.setInputCloud(cloud_min_2);
-            extract.setIndices(inliers);
-            extract.setNegative(false);  // 设置为 false，表示提取 inliers
-            extract.filter(*cloud);
-
-            pcl::UniformSampling<pcl::PointXYZI> uniform_sampling;
-            uniform_sampling.setInputCloud(cloud);
-            uniform_sampling.setRadiusSearch(0.3);  // 使用半径进行采样
-            uniform_sampling.filter(*cloud);
-            */
+           
             
 
             cout << i << ", " << j << " : " << z_min << " " << cloud->points.size() <<  endl;            

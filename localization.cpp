@@ -168,11 +168,11 @@ public:
 
         /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
         bool good_results = true;
-        double MaxCorrespondenceDistance = 3;
+        double MaxCorrespondenceDistance = 5;
         double best_max_distance;
         double score,min_score=100000;
         
-        while (MaxCorrespondenceDistance>1)
+        while (MaxCorrespondenceDistance>2)
         {   
             // Create an ICP object
             pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
