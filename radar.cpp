@@ -42,7 +42,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr create_radar_pc(Mat img)
     float delta_angle;
     float x, y, distance, angle;
     int k_strongest = 40;
-    float intensity_threshold = 80;
+    float intensity_threshold = 70;
     delta_angle = (2.0*M_PI)/image_cols;
 
        // go through all the radar image angles

@@ -120,7 +120,7 @@ void pub_all()
             // get the cloud of z=min2~z=min+4
             pass.setInputCloud(cloud);
             pass.setFilterFieldName("z");
-            pass.setFilterLimits(z_min+2, z_min+4.5);
+            pass.setFilterLimits(z_min+1.8, z_min+4.5);
             pass.setFilterLimitsNegative(false);
             pass.filter(*cloud);
 
