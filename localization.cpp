@@ -22,6 +22,8 @@
 #include <nav_msgs/Path.h>
 
 using namespace std;
+
+
 class Localizer
 {
 private:
@@ -177,16 +179,8 @@ public:
             Eigen::Matrix4f kinematic_guess;
             // Create an ICP object
             pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-                /*
-                double max_correspondence_distance = icp.getMaxCorrespondenceDistance();
-                int max_iterations = icp.getMaximumIterations();
-                double Epsilon = icp.getTransformationEpsilon();
-                cout << "Epsilon:" << Epsilon << endl;
-                */
-                //icp.setTransformationEpsilon (1e-9);
-            //icp.setMaximumIterations(10);
-            //icp.setMaxCorrespondenceDistance(MaxCorrespondenceDistance);
-            icp.setMaxCorrespondenceDistance (0.5);
+      
+            icp.setMaxCorrespondenceDistance (2);
             //icp.setMaximumIterations (100);
             //icp.setTransformationEpsilon (1e-8);
             //set source pc as radar point cloud, and target pc as map point cloud
@@ -208,7 +202,7 @@ public:
             }
             
             //init_guess from last icp plus kinematic compensation
-            Eigen::Vector4f s(2.2, 0.0, 0.0, 1.0);
+            Eigen::Vector4f s(2, 0.0, 0.0, 1.0);
             Eigen::Vector4f plus_world = init_guess * s;
             float x_plus_world,y_plus_world;
             x_plus_world = plus_world(0);
@@ -236,7 +230,7 @@ public:
             }
 
             //which has better score, then use its transformation matrix
-            if(icp_score[0] > icp_score[1])
+            if(icp_score[0] < icp_score[1])
             {
                 cout << " stop icp win, score: " << icp_score[0] << endl;
                 if(icp.getFitnessScore() < 15)
@@ -269,26 +263,6 @@ public:
                 pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
             }
                 
-
-                /*
-                float x_change, y_change, yaw_change;
-                x_change = aligned_to_initial(0,3);
-                y_change = aligned_to_initial(1,3);
-                yaw_change = atan2(aligned_to_initial(1, 0), aligned_to_initial(0, 0));
-                if(x_change<0 || abs(y_change)>10 ||abs(yaw_change)> M_PI/2 || icp.getFitnessScore()>50)
-                {
-                    ROS_WARN("ICP got wrong result!");
-                    Eigen::Vector4f v(0.5, 0.0, 0.0, 1.0);
-                    Eigen::Vector4f plus_world = init_guess * v;
-                    float x_plus_world;
-                    x_plus_world = plus_world(0);
-                    cout<<"x_plus_world:"<<x_plus_world<<endl;
-                    pose_x = x_plus_world;
-                    MaxCorrespondenceDistance -= 1;
-                } 
-                */
-
-       
             
         }
 
