@@ -53,7 +53,7 @@ private:
     float last_pose_x;
     float last_pose_y;
     float last_pose_yaw;
-    float distance, delta_angle;
+    float distance_gps_icp, delta_angle;
 
     int seq = 0;
     int max_iter;
@@ -120,10 +120,10 @@ public:
             gps_ready = true;
         }
         else
-        {
-            distance = sqrt(pow(gps_x-pose_x, 2) + pow(gps_y-pose_y, 2));
+        {   
+            distance_gps_icp = sqrt(pow(gps_x-pose_x, 2) + pow(gps_y-pose_y, 2));
             delta_angle = abs(gps_yaw - pose_yaw );
-            if(distance > 8 || delta_angle > M_PI/2)
+            if(distance_gps_icp > 8 || delta_angle > M_PI/2)
             {
                 pose_x = 0.8*gps_x+0.2*pose_x;
                 pose_y = 0.8*gps_y+0.2*pose_y;
@@ -165,79 +165,10 @@ public:
         }
 
         /*TODO : Implenment any scan matching base on initial guess, ICP, NDT, etc. */
-        
-        //store the pose before icp
-        last_pose_x = pose_x;
-        last_pose_y = pose_y;
-        last_pose_yaw = pose_yaw;
-        last_init_guess = init_guess;
-
-        bool get_good_result = false;
-        int flag = 1;
-        
-        while(!get_good_result && flag >= 0)
-        {   
-            float x_new_guess,y_new_guess;
-            // Create an ICP object
-            pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-            icp.setMaxCorrespondenceDistance (3);
-            icp.setMaximumIterations (100);
-            icp.setTransformationEpsilon (1e-5);
-            icp.setEuclideanFitnessEpsilon(1e-5);
-            //set source pc as radar point cloud, and target pc as map point cloud
-            icp.setInputSource(radar_pc);
-            icp.setInputTarget(map_pc);
-            //run the ICP, then get the transformation matrix after icp as new base_link
-            icp.align(*output_pc, init_guess);
-            init_guess = icp.getFinalTransformation();
-
-            pose_x = init_guess(0, 3);
-            pose_y = init_guess(1, 3);
-            pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
-            Eigen::Vector4f new_pose(pose_x, pose_y, 0, 1);
-            cout << "last pose: [ " << last_pose_x << ", " << last_pose_y << ", " << last_pose_yaw << " ]" << endl;
-            cout << "icp pose: [ " << pose_x << ", " << pose_y << ", " << pose_yaw << " ]" << endl;
-            //find the change under the old base_link frame
-            float x_change, y_change, yaw_change;
-            Eigen::Vector4f change = last_init_guess.inverse() * new_pose;
-            x_change = change(0);
-            y_change = change(1);
-            yaw_change = pose_yaw - last_pose_yaw;
-            cout << "changes : [ " << x_change << ", " << y_change << ". " << yaw_change << " ]" << endl;
-            //if icp get bad result, it will use the old base_link frame run forward on its heading direction
-            //then do the icp again
-            if(x_change<-0.3 || abs(yaw_change)> M_PI/2)
-            {   
-                Eigen::Vector4f v(0.2, 0.0, 0.0, 1.0);
-                Eigen::Vector4f plus_world = last_init_guess * v;
-                x_new_guess = plus_world(0);
-                y_new_guess = plus_world(1);
-                if(flag>0)
-                {
-                    ROS_WARN("ICP got wrong result!, changing the initial guess and do icp again");
-                    cout << "x change :" << x_change << endl;
-                    cout << "yaw_change :" << yaw_change << endl;
-                }
-                else
-                {
-                    ROS_WARN("again is bad, use straight forward!");
-                    pose_x = x_new_guess;
-                    pose_y = y_new_guess;
-                    pose_yaw = last_pose_yaw;
-                }
-                set_init_guess(x_new_guess,y_new_guess,last_pose_yaw);
-            }
-            else 
-            {   
-                get_good_result = true;
-            }
-
-            flag--;
-        }
-        /*
-         // Create an ICP object
+     
+        // Create an ICP object
         pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-        icp.setMaxCorrespondenceDistance (3);
+        icp.setMaxCorrespondenceDistance (2.5);
         icp.setMaximumIterations (100);
         icp.setTransformationEpsilon (1e-5);
         icp.setEuclideanFitnessEpsilon(1e-5);
@@ -251,7 +182,7 @@ public:
         pose_x = init_guess(0, 3);
         pose_y = init_guess(1, 3);
         pose_yaw = atan2(init_guess(1, 0), init_guess(0, 0));    // yaw = atan2(sin(yaw),cos(yaw))
-        */
+        
         tf_brocaster(pose_x, pose_y, pose_yaw);
         radar_pose_publisher(pose_x, pose_y, pose_yaw);
        
